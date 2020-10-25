@@ -16,6 +16,18 @@ char = pygame.image.load(os.path.join("imgs",'standing.png'))
 
 clock = pygame.time.Clock()
 
+bulletSound = pygame.mixer.Sound(os.path.join("imgs","bullet.wav"))
+hitSound = pygame.mixer.Sound(os.path.join("imgs","hit.wav"))
+bulletSound.set_volume(0.15)
+hitSound.set_volume(0.15)
+
+music = pygame.mixer.music.load(os.path.join("imgs","music.mp3"))
+
+pygame.mixer.music.play(-1)
+pygame.mixer.music.set_volume(0.2)
+
+score = 0
+
 class player(object):
     def __init__(self, x, y, width, height):
         self.x = x
@@ -48,7 +60,30 @@ class player(object):
             else:
                 win.blit(walkLeft[0],(self.x,self.y))
         self.hitbox = (self.x + 17, self.y+11, 29, 52)
-        pygame.draw.rect(win, (255,0,0), self.hitbox,2)
+        #pygame.draw.rect(win, (255,0,0), self.hitbox,2)
+
+    def hit(self):
+        self.isJump = False
+        self.jumpCount = 10
+        self.x = 60
+        self.y = 410
+        self.walkCount = 0
+        font1 = pygame.font.SysFont('comicsans',100)
+
+        text = font1.render('-5', 1, (255,0,0))
+        win.blit(text, (WIDTH/2 - (text.get_width()/2),200))
+        pygame.display.update()
+
+        i = 0
+        while i < 300:
+            pygame.time.delay(10)
+            i += 1
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    i = 301
+                    pygame.quit()
+            
+
 
 class enemy(object):
     walkRight = [pygame.image.load(os.path.join("imgs",'R1E.png')), pygame.image.load(os.path.join("imgs",'R2E.png')), pygame.image.load(os.path.join("imgs",'R3E.png')), pygame.image.load(os.path.join("imgs",'R4E.png')), pygame.image.load(os.path.join("imgs",'R5E.png')), pygame.image.load(os.path.join("imgs",'R6E.png')), pygame.image.load(os.path.join("imgs",'R7E.png')), pygame.image.load(os.path.join("imgs",'R8E.png')), pygame.image.load(os.path.join("imgs",'R9E.png')), pygame.image.load(os.path.join("imgs",'R10E.png')), pygame.image.load(os.path.join("imgs",'R11E.png'))]
@@ -64,19 +99,26 @@ class enemy(object):
         self.walkcount = 0
         self.vel = 3
         self.hitbox = (self.x + 17, self.y + 2, 31, 57)
+        self.health = 10  #10 hits to die
+        self.visible = True
 
     def draw(self, win):
         self.move()
-        if self.walkcount + 1 >= 33:
-            self.walkcount = 0
-        if  self.vel > 0:
-            win.blit(self.walkRight[self.walkcount //3], (self.x, self.y))
-            self.walkcount += 1
-        else:
-            win.blit(self.walkLeft[self.walkcount //3], (self.x, self.y))
-            self.walkcount += 1
-        self.hitbox = (self.x + 17, self.y + 2, 31, 57)
-        pygame.draw.rect(win, (255,0,0), self.hitbox, 2)
+        if self.visible:
+            if self.walkcount + 1 >= 33:
+                self.walkcount = 0
+            if  self.vel > 0:
+                win.blit(self.walkRight[self.walkcount //3], (self.x, self.y))
+                self.walkcount += 1
+            else:
+                win.blit(self.walkLeft[self.walkcount //3], (self.x, self.y))
+                self.walkcount += 1
+
+            pygame.draw.rect(win,(255,0,0), (self.hitbox[0], self.hitbox[1]-20, 50, 10))
+            pygame.draw.rect(win,(0,128,0), (self.hitbox[0], self.hitbox[1]-20, 50 - (5 * (10 - self.health)), 10))
+
+            self.hitbox = (self.x + 17, self.y + 2, 31, 57)
+            #pygame.draw.rect(win, (255,0,0), self.hitbox, 2)
 
     def move(self):
         if self.vel > 0:
@@ -93,8 +135,10 @@ class enemy(object):
                 self.walkcount = 0
 
     def hit(self):
-        print("hit")
-        pass
+        if self.health > 1:
+            self.health -= 1
+        else:
+            self.visible = False
 
 
 
@@ -113,6 +157,8 @@ class projectile(object):
 
 def redrawGameWindow():
     win.blit(bg, (0,0))
+    text = font.render("Score: " + str(score), 1, (0,0,0))
+    win.blit(text, (370,10))
     man.draw(win)
     enemy.draw(win)
     for bullet in bullets:
@@ -121,6 +167,7 @@ def redrawGameWindow():
 
 
 #mainloop
+font = pygame.font.SysFont("comicsans", 30, True)
 man = player(300,410,64,64)
 enemy = enemy(100,410,64,64,450)
 shootLoop = 0
@@ -128,6 +175,12 @@ bullets = []
 run = True
 while run:
     clock.tick(27)
+
+    if enemy.visible:
+        if man.hitbox[1] < enemy.hitbox[1] + enemy.hitbox[3] and man.hitbox[1] + man.hitbox[3] > enemy.hitbox[1]:
+            if man.hitbox[0] + man.hitbox[2] > enemy.hitbox[0] and man.hitbox[0] < enemy.hitbox[0] + enemy.hitbox[2]:
+                man.hit()
+                score -= 5
 
     if shootLoop > 0:
         shootLoop += 1
@@ -139,10 +192,13 @@ while run:
             run = False
     
     for bullet in bullets:
-        if bullet.y - bullet.radius < enemy.hitbox[1] + enemy.hitbox[3] and bullet.y + bullet.radius > enemy.hitbox[1]:
-            if bullet.x + bullet.radius > enemy.hitbox[0] and bullet.x - bullet.radius < enemy.hitbox[0] + enemy.hitbox[2]:
-                enemy.hit()
-                bullets.pop(bullets.index(bullet))
+        if enemy.visible:
+            if bullet.y - bullet.radius < enemy.hitbox[1] + enemy.hitbox[3] and bullet.y + bullet.radius > enemy.hitbox[1]:
+                if bullet.x + bullet.radius > enemy.hitbox[0] and bullet.x - bullet.radius < enemy.hitbox[0] + enemy.hitbox[2]:
+                    hitSound.play()
+                    enemy.hit()
+                    score += 1
+                    bullets.pop(bullets.index(bullet))
 
         if bullet.x < WIDTH and bullet.x > 0:
             bullet.x += bullet.vel
@@ -152,6 +208,7 @@ while run:
     keys = pygame.key.get_pressed()
 
     if keys[pygame.K_SPACE] and shootLoop == 0:
+        bulletSound.play()
         if man.left:
             facing = -1
         else:
